@@ -98,7 +98,11 @@ class Use(object):
         try:
             return self._callable(data)
         except SchemaError as x:
-            raise SchemaError([None] + x.autos, [self._error] + x.errors)
+            f = self._callable
+            reason = 'callable raised exception'
+            raise SchemaError([None] + x.autos,
+                              [format_error(self._error, f, data, reason, x)] +
+                              x.errors)
         except BaseException as x:
             f = self._callable
             reason = 'callable raised exception'
@@ -194,12 +198,14 @@ class Schema(object):
             try:
                 return s.validate(data)
             except SchemaError as x:
-                raise SchemaError([None] + x.autos, [e] + x.errors)
+                reason = 'validate raised exception'
+                raise SchemaError([None] + x.autos,
+                                  [format_error(e, s, data, reason, x)] +
+                                  x.errors)
             except BaseException as x:
                 reason = 'validate raised exception'
                 raise SchemaError(auto_error(s, data, reason, x),
-                                  format_error(self._error, s, data, reason,
-                                               x))
+                                  format_error(e, s, data, reason, x))
         if issubclass(type(s), type):
             if isinstance(data, s):
                 return data
@@ -212,12 +218,14 @@ class Schema(object):
                 if s(data):
                     return data
             except SchemaError as x:
-                raise SchemaError([None] + x.autos, [e] + x.errors)
+                reason = 'callable raised exception'
+                raise SchemaError([None] + x.autos,
+                                  [format_error(e, s, data, reason, x)] +
+                                  x.errors)
             except BaseException as x:
                 reason = 'callable raised exception'
                 raise SchemaError(auto_error(s, data, reason, x),
-                                  format_error(self._error, s, data, reason,
-                                               x))
+                                  format_error(e, s, data, reason, x))
             reason = 'should evaluate to True'
             raise SchemaError(auto_error(s, data, reason),
                               format_error(e, s, data, reason))
