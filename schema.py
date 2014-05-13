@@ -3,7 +3,9 @@ __version__ = '0.3.0'
 error_messages = {
     'did not validate': '{schema} {reason} {data}',
     'callable raised exception': '{schema}({data}) raised {details}',
+    'callable raised schema error': None,
     'validate raised exception': '{schema}.validate({data}) raised {details}',
+    'validate raised schema error': None,
     'invalid value for key': '{reason} {details}',
     'missed keys': '{reason} {details}',
     'wrong keys': '{reason} {details} in {data}',
@@ -33,10 +35,19 @@ class SchemaError(Exception):
 
     """Error during Schema validation."""
 
-    def __init__(self, autos, errors):
-        self.autos = autos if type(autos) is list else [autos]
-        self.errors = errors if type(errors) is list else [errors]
+    def __init__(self, contexts):
+        self.contexts = contexts if type(contexts) is list else [contexts]
         Exception.__init__(self, self.code)
+
+    @property
+    def autos(self):
+        return [c if isinstance(c, basestring) else auto_error(*c[1:])
+                for c in self.contexts]
+
+    @property
+    def errors(self):
+        return [c if isinstance(c, basestring) else format_error(*c)
+                for c in self.contexts]
 
     @property
     def code(self):
@@ -71,17 +82,15 @@ class And(object):
 class Or(And):
 
     def validate(self, data):
-        x = SchemaError([], [])
+        x = SchemaError([])
         for s in [Schema(s, error=self._error) for s in self._args]:
             try:
                 return s.validate(data)
             except SchemaError as _x:
                 x = _x
         reason = 'did not validate'
-        raise SchemaError([auto_error(self, data, reason)] +
-                          x.autos,
-                          [format_error(self._error, self, data, reason)] +
-                          x.errors)
+        raise SchemaError([(self._error, self, data, reason)] +
+                          x.contexts)
 
 
 class Use(object):
@@ -99,15 +108,13 @@ class Use(object):
             return self._callable(data)
         except SchemaError as x:
             f = self._callable
-            reason = 'callable raised exception'
-            raise SchemaError([None] + x.autos,
-                              [format_error(self._error, f, data, reason, x)] +
-                              x.errors)
+            reason = 'callable raised schema error'
+            raise SchemaError([(self._error, f, data, reason, x)] +
+                              x.contexts)
         except BaseException as x:
             f = self._callable
             reason = 'callable raised exception'
-            raise SchemaError(auto_error(f, data, reason, x),
-                              format_error(self._error, f, data, reason, x))
+            raise SchemaError((self._error, f, data, reason, x))
 
 
 def priority(s):
@@ -173,68 +180,52 @@ class Schema(object):
                     if x is not None:
                         reason = 'invalid value for key'
                         details = '%r' % key
-                        raise SchemaError([auto_error(s, data, reason,
-                                                      details)] +
-                                          x.autos,
-                                          [format_error(e, s, data, reason,
-                                                        details)] +
-                                          x.errors)
+                        raise SchemaError([(e, s, data, reason, details)] +
+                                          x.contexts)
             coverage = set(k for k in coverage if type(k) is not Optional)
             required = set(k for k in s if type(k) is not Optional)
             if coverage != required:
                 reason = 'missed keys'
                 details = '%r' % (required - coverage)
-                raise SchemaError(auto_error(s, data, reason,
-                                             details),
-                                  format_error(e, s, data, reason, details))
+                raise SchemaError((e, s, data, reason, details))
             if len(new) != len(data):
                 wrong_keys = set(data.keys()) - set(new.keys())
                 reason = 'wrong keys'
                 details = ', '.join('%r' % k for k in sorted(wrong_keys))
-                raise SchemaError(auto_error(s, data, reason, details),
-                                  format_error(e, s, data, reason, details))
+                raise SchemaError((e, s, data, reason, details))
             return new
         if hasattr(s, 'validate'):
             try:
                 return s.validate(data)
             except SchemaError as x:
-                reason = 'validate raised exception'
-                raise SchemaError([None] + x.autos,
-                                  [format_error(e, s, data, reason, x)] +
-                                  x.errors)
+                reason = 'validate raised schema error'
+                raise SchemaError([(e, s, data, reason, x)] + x.contexts)
             except BaseException as x:
                 reason = 'validate raised exception'
-                raise SchemaError(auto_error(s, data, reason, x),
-                                  format_error(e, s, data, reason, x))
+                raise SchemaError((e, s, data, reason, x))
         if issubclass(type(s), type):
             if isinstance(data, s):
                 return data
             else:
                 reason = 'incorrect instance'
-                raise SchemaError(auto_error(s, data, reason),
-                                  format_error(e, s, data, reason))
+                raise SchemaError((e, s, data, reason))
         if callable(s):
             try:
                 if s(data):
                     return data
             except SchemaError as x:
-                reason = 'callable raised exception'
-                raise SchemaError([None] + x.autos,
-                                  [format_error(e, s, data, reason, x)] +
-                                  x.errors)
+                reason = 'callable raised schema error'
+                raise SchemaError([(e, s, data, reason, x)] + x.contexts)
             except BaseException as x:
                 reason = 'callable raised exception'
-                raise SchemaError(auto_error(s, data, reason, x),
-                                  format_error(e, s, data, reason, x))
+                raise SchemaError((e, s, data, reason, x))
             reason = 'should evaluate to True'
-            raise SchemaError(auto_error(s, data, reason),
-                              format_error(e, s, data, reason))
+            raise SchemaError((e, s, data, reason))
         if s == data:
             return data
         else:
             reason = 'does not match'
-            raise SchemaError(auto_error(s, data, reason),
-                              format_error(e, s, data, reason))
+            raise SchemaError((e, s, data, reason))
 
 
 class Optional(Schema):

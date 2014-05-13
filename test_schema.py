@@ -20,7 +20,7 @@ def ve(_):
 
 
 def se(_):
-    raise SchemaError('first auto', 'first error')
+    raise SchemaError('first error')
 
 
 def test_schema():
@@ -193,12 +193,12 @@ def test_use_error_handling():
     try:
         Use(se).validate('x')
     except SchemaError as e:
-        assert e.autos == [None, 'first auto']
+        assert e.autos == [None, 'first error']
         assert e.errors == [None, 'first error']
     try:
         Use(se, error='second error').validate('x')
     except SchemaError as e:
-        assert e.autos == [None, 'first auto']
+        assert e.autos == [None, 'first error']
         assert e.errors == ['second error', 'first error']
 
 
@@ -247,12 +247,12 @@ def test_and_error_handling():
     try:
         And(str, se).validate('x')
     except SchemaError as e:
-        assert e.autos == [None, 'first auto']
+        assert e.autos == [None, 'first error']
         assert e.errors == [None, 'first error']
     try:
         And(str, se, error='second error').validate('x')
     except SchemaError as e:
-        assert e.autos == [None, 'first auto']
+        assert e.autos == [None, 'first error']
         assert e.errors == ['second error', 'first error']
 
 
@@ -270,12 +270,12 @@ def test_schema_error_handling():
     try:
         Schema(Use(se)).validate('x')
     except SchemaError as e:
-        assert e.autos == [None, None, 'first auto']
+        assert e.autos == [None, None, 'first error']
         assert e.errors == [None, None, 'first error']
     try:
         Schema(Use(se), error='second error').validate('x')
     except SchemaError as e:
-        assert e.autos == [None, None, 'first auto']
+        assert e.autos == [None, None, 'first error']
         assert e.errors == ['second error', None, 'first error']
 
 
